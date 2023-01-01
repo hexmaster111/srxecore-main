@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# introductory stuff
+pcregrep -M -h -o1 '/\* ---\n((\n|.)*?)--- \*/' src/main.c src/_avr_includes.h src/_srxe_includes.h src/common.h > README.md
+
+# system level stuff
+pcregrep -M -h -o1 '/\* ---\n((\n|.)*?)--- \*/' src/clock.h src/power.h src/eeprom.h src/random.h src/flash.h src/rf.h >> README.md
+
+# device level stuff
+pcregrep -M -h -o1 '/\* ---\n((\n|.)*?)--- \*/' src/keyboard.h src/lcdbase.h src/lcddraw.h src/lcdtext.h src/ui.h src/printf.h >> README.md
+
+# debugg stuff
+pcregrep -M -h -o1 '/\* ---\n((\n|.)*?)--- \*/' src/uart.h src/leds.h >> README.md
+
+# tools
+pcregrep -M -h -o1 '/\* ---((\n|.)*?)--- \*/' files/bitmap_gen.py files/font_gen.py files/screen_grabber.py >> README.md
+
+#example
+pcregrep -M -h -o1 '/\* ---\n((\n|.)*?)--- \*/' src/smoketest.h >> README.md
