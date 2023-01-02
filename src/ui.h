@@ -209,6 +209,8 @@ uint8_t uiMenu(const char* menus[], const char* title, uint8_t menu_shape, bool 
 }
 
 
+#define UI_TEXTBOX_WRAP           0x01    // wrap input onto multiple lines (currently assumed)
+#define UI_TEXTBOX_INLINE_LABEL   0x02    // label will render at start of line (currently assumed)
 /* ---
 #### void uiTextBox()
 
@@ -225,14 +227,10 @@ The input parameters are:
 
 Render flags (_not all implemented_):
 ```C
-*/
 #define UI_TEXTBOX_WRAP           0x01    // wrap input onto multiple lines (currently assumed)
 #define UI_TEXTBOX_INLINE_LABEL   0x02    // label will render at start of line (currently assumed)
-/*
 ```
-
 **Note:** the wrap feature does not use any word break algorithm.
-
 _The function uses the current font and color._
 --- */
 void uiTextBox(char* buffer, char* label, uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint16_t flags) {

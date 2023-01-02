@@ -3,10 +3,29 @@
 #include "_avr_includes.h"
 #include "_srxe_includes.h"
 #include "panic.h"
+#include "../queue.h"
+#include "kernal_flags.h"
+
+typedef struct
+{
+    uint8_t error; // non zero if there was an error
+} KERNAL_EVENT_HANDLER_RETURN;
+
+typedef struct
+{
+    uint8_t event_id;
+    uint16_t event_data;
+} KMSG;
+
+typedef KERNAL_EVENT_HANDLER_RETURN (*KERNAL_EVENT_HANDLER)(KMSG *);
+
+QUEUE_TEMPLATE(KMSG);
+
+Queue_KMSG *_kernal_message_queue;
 
 #define INACTIVITY_TIMEOUT 600000
-
 #define KEYSCAN_INTERVAL 10
+
 static unsigned long _keyscan_timer;
 static unsigned long _last_key_pressed_time;
 
@@ -17,23 +36,7 @@ static unsigned long _timer_interval = 0;
 static unsigned long _battery_check_timer;
 uint16_t _last_battery_level = 0;
 
-// Thease flags are used to tell the application what event has occured, the kernal sets the flags
-uint8_t kernal_event_flags = 0;
-#define KERNAL_EVENT_FLAG__KEYPRESS 0b00000001 // The user pressed a key, run GetLastPressedKey() to see what it was,
-#define KERNAL_EVENT_FLAG__WAKEUP 0b00000010   // The device was woken up from sleep, the app should redraw the screen
-#define KERNAL_EVENT_FLAG__SLEEP 0b00000100    // The device is about to go to sleep, the app should save any data it needs to
-#define KERNAL_EVENT_FLAG__TIMER 0b00001000    // The timer has expired, the app should do whatever it needs to do on a timer
-#define KERNAL_EVENT_FLAG__BATTERY 0b00010000  // The battery voltage has changed
-
-uint8_t (*_app_event_handler)(uint8_t *event_flags) = NULL;
-
 //******************************** Kernal Exposed API Functions ********************************
-
-// Returns the last key pressed
-uint8_t Kernal_GetLastPressedKey(void)
-{
-    return _last_key & 0xFF;
-}
 
 // This should be used for things that dont require alot of accuracy, its a lazy way to keep pumping the app events
 void Kernal_SetRefreshTimer(unsigned long interval_ms)
@@ -42,53 +45,48 @@ void Kernal_SetRefreshTimer(unsigned long interval_ms)
     _timer = clockMillis();
 }
 
-// This function is called by the app to tell the kernal what function to call when an event occurs,
-// the kernal will call the function when the event occurs
-void Kernal_RegisterKernalEventHandler(uint8_t (*app_event_handler)(uint8_t *event_flags))
+KERNAL_EVENT_HANDLER _event_handler = NULL;
+
+bool KernalRegisterEventHandler(KERNAL_EVENT_HANDLER event_handler)
 {
-    _app_event_handler = app_event_handler;
-    if (_app_event_handler == NULL)
-        kernal_panic("Event handler got set to null", 2, true);
+    if (_event_handler == NULL)
+    {
+        _event_handler = event_handler;
+        return true;
+    }
+    return false;
 }
 
 //******************************** Internal Functions ********************************
 
-int _do_event_handling(void)
-{
-    int error_code = 0;
-
-    if (kernal_event_flags == 0)
-        return 0; // no events to handles
-
-    if (_app_event_handler != NULL)
-        error_code = _app_event_handler(&kernal_event_flags);
-    else
-        kernal_panic("No app event registered", 1, true);
-
-    return error_code;
-}
-
 void _kernal_init(void)
 {
+    _kernal_message_queue = createQueue_KMSG(10);
+
     clockInit();
     powerInit();
     kbdInit();
     lcdInit();
     _keyscan_timer = clockMillis();
+
+    Enqueue_KMSG(_kernal_message_queue, (KMSG){.event_id = KERNAL_EVENT_WAKEUP});
 }
 
 void _do_appsafe_sleep()
 {
-    // We are about to sleep, let the app know
-    kernal_event_flags |= KERNAL_EVENT_FLAG__SLEEP;
-    _do_event_handling();
+    Enqueue_KMSG(_kernal_message_queue, (KMSG){.event_id = KERNAL_EVENT_SLEEP});
+
+    // TODO: Wait for some sort of response from the app, or a timeout then sleep fornow crash with not implemented
+    kernal_panic("Sleep saving not implemented", 0, false);
+
     lcdSleep();
     // sleeping now
     powerSleep();
     // We are now awake
     lcdWake();
     _last_key_pressed_time = _keyscan_timer = clockMillis();
-    kernal_event_flags |= KERNAL_EVENT_FLAG__WAKEUP;
+
+    Enqueue_KMSG(_kernal_message_queue, (KMSG){.event_id = KERNAL_EVENT_WAKEUP});
 }
 
 int _handle_keypress_checks(void)
@@ -125,12 +123,37 @@ int _handle_keypress_checks(void)
                 break;
 
             default:
-                kernal_event_flags |= KERNAL_EVENT_FLAG__KEYPRESS;
+                Enqueue_KMSG(_kernal_message_queue, (KMSG){.event_id = KERNAL_EVENT_KEYPRESS, .event_data = key});
                 break;
             }
         }
     }
+    return 0;
+}
 
+int _handle_timer_checks(void)
+{
+    // Generic Timer handling
+    if (_timer_interval != 0 && clockMillis() >= _timer)
+    {
+        _timer = clockMillis() + _timer_interval;
+        Enqueue_KMSG(_kernal_message_queue, (KMSG){.event_id = KERNAL_EVENT_TIMER, .event_data = _timer});
+    }
+    return 0;
+}
+
+int _handle_inactivity_timeout(void)
+{
+    if (clockMillis() >= _last_key_pressed_time + INACTIVITY_TIMEOUT)
+    {
+        _last_key_pressed_time = clockMillis();
+        _do_appsafe_sleep();
+    }
+    return 0;
+}
+
+int _handle_battery_checks(void)
+{
     // Battery voltage handling
     if (clockMillis() >= _battery_check_timer)
     {
@@ -138,47 +161,62 @@ int _handle_keypress_checks(void)
 
         if (powerBatteryLevel() != _last_battery_level)
         {
-            kernal_event_flags |= KERNAL_EVENT_FLAG__BATTERY;
             _last_battery_level = powerBatteryLevel();
+
+            Enqueue_KMSG(_kernal_message_queue, (KMSG){.event_id = KERNAL_EVENT_BATTERY, .event_data = _last_battery_level});
         }
     }
-
-    // Inactivity timeout handling
-    if (clockMillis() >= _last_key_pressed_time + INACTIVITY_TIMEOUT)
-    {
-        _last_key_pressed_time = clockMillis();
-        _do_appsafe_sleep();
-    }
-
-    // Generic Timer handling
-    if (_timer_interval > 0 && clockMillis() >= _timer)
-    {
-        _timer = clockMillis() + _timer_interval;
-        kernal_event_flags |= KERNAL_EVENT_FLAG__TIMER;
-    }
-
     return 0;
 }
 
-int kernal_main(void)
+void _kernal_check_for_changes(void)
 {
-    _kernal_init();
-    kernal_event_flags |= KERNAL_EVENT_FLAG__WAKEUP;
+    int status = 0;
 
-    int kernal_loop_status = 0;
+    status = _handle_keypress_checks();
+    if (status != 0)
+        kernal_panic("Error in keypress checks", status, true);
 
-    while (kernal_loop_status == 0)
+    status = _handle_battery_checks();
+    if (status != 0)
+        kernal_panic("Error in battery checks", status, true);
+
+    status = _handle_inactivity_timeout();
+    if (status != 0)
+        kernal_panic("Error in inactivity timeout", status, true);
+
+    status = _handle_timer_checks();
+    if (status != 0)
+        kernal_panic("Error in timer checks", status, true);
+}
+
+
+/// @brief Gets the next message from the kernal, if there is no message avalable, this call will block until there is one
+/// @param msg The message to fill
+/// @return Continue pumping messages + error codes
+bool KernalGetMessage(KMSG *msg)
+{
+
+    while (QueueEmpty_KMSG(_kernal_message_queue))
     {
-        kernal_loop_status = _handle_keypress_checks();
-        if (kernal_loop_status != 0)
-            break;
-        kernal_loop_status = _do_event_handling();
-        if (kernal_loop_status != 0)
-            break;
+        _kernal_check_for_changes();
     }
 
-    if (kernal_loop_status != 0)
-        kernal_panic("Main exited with code", kernal_loop_status, true);
+    *msg = front_KMSG(_kernal_message_queue);
+    if (msg == NULL)
+        debug_panic("Kernal message queue is empty but we have elements in it", 0, true);
+    Dequeue_KMSG(_kernal_message_queue);
 
-    return kernal_loop_status;
+    return true; // Keep pump runnint
+}
+
+void DispatchMessage(KMSG *msg)
+{
+    if (_event_handler == NULL)
+        kernal_panic("No event handler registered", 0, true);
+
+    KERNAL_EVENT_HANDLER_RETURN ret = _event_handler(msg);
+
+    if (ret.error != 0)
+        kernal_panic("Error in event handler", ret.error, true);
 }

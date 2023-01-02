@@ -7,16 +7,17 @@ void _reboot(void)
     asm volatile("jmp 0");
 }
 
-void kernal_panic(const char *msg, int error_code, bool non_recoverable)
-{
+#define HSK_DEBUG
 
+void _panic(const char *sender, const char *msg, int error_code, bool halt)
+{
     // Clear the screen
     lcdClearScreen();
 
     lcdFontSet(FONT2);
 
     // Print the message
-    lcdPutStringAt("Kernal Panic:", 0, 0);
+    lcdPutStringAt(sender, 0, 0);
     lcdPutStringAt(msg, 0, lcdFontHeightGet() * 1);
 
     // Print the error code
@@ -25,7 +26,7 @@ void kernal_panic(const char *msg, int error_code, bool non_recoverable)
     lcdPutStringAt("Error Code:", 0, lcdFontHeightGet() * 2);
     lcdPutStringAt(error_code_str, 0, lcdFontHeightGet() * 3);
 
-    if (non_recoverable)
+    if (halt)
     {
 
         lcdPutStringAt("Press power to shutdown", 0, lcdFontHeightGet() * 4);
@@ -54,6 +55,18 @@ void kernal_panic(const char *msg, int error_code, bool non_recoverable)
         while (kbdGetKey() == 0)
             ;
     }
+}
+
+void kernal_panic(const char *msg, int error_code, bool halt)
+{
+    _panic("Kernal Panic", msg, error_code, halt);
+}
+
+void debug_panic(const char *msg, int code, bool halt)
+{
+#ifdef HSK_DEBUG
+    _panic("Debug Panic",msg, code, halt);
+#endif
 }
 
 #endif

@@ -71,40 +71,52 @@ Complete Table of Contents:
 
 #ifndef SHOW_SMOKETEST_DEMO
 #include "simple_kernal/kernal_main.h"
+#include "simple_kernal/kernal_flags.h"
 
 const char *_softkey_menu_names[] = {"<--", NULL, NULL, NULL, NULL, "-->", NULL, NULL, NULL, NULL};
 
 long debug_call_count = 0;
 
-uint8_t debug_event_handler(uint8_t *event)
+KERNAL_EVENT_HANDLER_RETURN debug_event_handler(KMSG *event)
 {
 	// kernal_panic("Event handler called with", event, false);
 
-	// check if the event contains a keyPress
-	if (event && KERNAL_EVENT_FLAG__KEYPRESS)
+	KERNAL_EVENT_HANDLER_RETURN ret = {.error = 0};
+
+	switch (event->event_id)
 	{
-		lcdClearScreen();
+	case KERNAL_EVENT_KEYPRESS:
+		// lcdClearScreen();
+		break;
+	case KERNAL_EVENT_TIMER:
+		debug_call_count++;
+		break;
+	default:
+		break;
 	}
 
-	debug_call_count++;
+	lcdFontSet(FONT3);
 
-	lcdFontSet(FONT2);
+	char buff[24];
 
 	// Print the message
 	lcdPutStringAt("Update Flags:", 30, lcdFontHeightGet());
 
-	char buff[10];
-
-	sprintf_(buff, "%08b", *event);
-	lcdPutStringAt(buff, 30, lcdFontHeightGet() * 2);
-	itoa(debug_call_count, buff, 10);
+	// Print event flags
+	sprintf_(buff, "%02X", event->event_id);
 	lcdPutStringAt(buff, 30, lcdFontHeightGet() * 3);
+
+	// Print event data
+	sprintf_(buff, "%04X", event->event_data);
+	lcdPutStringAt(buff, 30 + lcdFontWidthGet() * 3, lcdFontHeightGet() * 3);
+
+	// print the call count
+	itoa(debug_call_count, buff, 10);
+	lcdPutStringAt(buff, 30, lcdFontHeightGet() * 4);
 	sprintf_(buff, "%c", _last_key);
 	uiMenu(_softkey_menu_names, NULL, UI_MENU_ROUND_END, false);
 
-	
-	*event = 0;
-	return 0;
+	return ret;
 }
 
 #endif
@@ -116,14 +128,22 @@ int main()
 #endif
 
 #ifndef SHOW_SMOKETEST_DEMO
-	Kernal_RegisterKernalEventHandler(debug_event_handler);
-	Kernal_SetRefreshTimer(500);
+	_kernal_init();
 
-	kernal_main();
+	KernalRegisterEventHandler(&debug_event_handler);
+	// Kernal_SetRefreshTimer(1000);
+
+	KMSG msg;
+
+	while (KernalGetMessage(&msg))
+	{
+		DispatchMessage(&msg);
+	}
 
 #endif
-	while (1)
-	{
-	}
+
+	// Controling code exited, so its time to power down or do some poweroff action, for now the crash screen has a power off option
+	debug_panic("Kernal messagepump ended", msg.event_id, true);
+
 	return 0;
 }

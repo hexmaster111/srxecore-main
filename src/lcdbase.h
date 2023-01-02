@@ -663,7 +663,7 @@ int lcdInit() {
 
 	_srxe_spi_init();
 
-	srxePinMode(LCD_CS, OUTPUT);
+	srxePinMode(LCD_CS, OUTPUT); //CRASHED IN HERE ON SIMULATOR
 	//srxePinMode(FLASH_CS, OUTPUT);
 	srxeDigitalWrite(LCD_CS, HIGH);
 
