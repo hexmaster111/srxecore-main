@@ -70,8 +70,11 @@ Complete Table of Contents:
 #endif
 
 #ifndef SHOW_SMOKETEST_DEMO
+
 #include "simple_kernal/kernal_main.h"
 #include "simple_kernal/kernal_flags.h"
+
+#include "micro_gl/micro_gl.h"
 
 const char *_softkey_menu_names[] = {"<--", NULL, NULL, NULL, NULL, "-->", NULL, NULL, NULL, NULL};
 
@@ -79,41 +82,42 @@ long debug_call_count = 0;
 
 KERNAL_EVENT_HANDLER_RETURN debug_event_handler(KMSG *event)
 {
-	// kernal_panic("Event handler called with", event, false);
-
-	KERNAL_EVENT_HANDLER_RETURN ret = {.error = 0};
+	KERNAL_EVENT_HANDLER_RETURN ret = {.error = 0, .error_message = NULL};
 
 	switch (event->event_id)
 	{
 	case KERNAL_EVENT_KEYPRESS:
-		// lcdClearScreen();
 		break;
 	case KERNAL_EVENT_TIMER:
-		debug_call_count++;
+		break;
+	case KERNAL_EVENT_BATTERY:
+		break;
+	case KERNAL_EVENT_SLEEP:
+		break;
+	case KERNAL_EVENT_WAKEUP:
 		break;
 	default:
+		ret = (KERNAL_EVENT_HANDLER_RETURN){.error = 1, .error_message = "event handler Unknown event"};
 		break;
 	}
 
 	lcdFontSet(FONT3);
 
-	char buff[24];
+	char buff[10];
 
 	// Print the message
 	lcdPutStringAt("Update Flags:", 30, lcdFontHeightGet());
 
 	// Print event flags
 	sprintf_(buff, "%02X", event->event_id);
-	lcdPutStringAt(buff, 30, lcdFontHeightGet() * 3);
+	lcdPutStringAt(buff, 30, lcdFontHeightGet() * 2);
+
+	lcdPutStringAt(":", 30 + lcdFontWidthGet() * 2, lcdFontHeightGet() * 2);
 
 	// Print event data
 	sprintf_(buff, "%04X", event->event_data);
-	lcdPutStringAt(buff, 30 + lcdFontWidthGet() * 3, lcdFontHeightGet() * 3);
+	lcdPutStringAt(buff, 30 + lcdFontWidthGet() * 3, lcdFontHeightGet() * 2);
 
-	// print the call count
-	itoa(debug_call_count, buff, 10);
-	lcdPutStringAt(buff, 30, lcdFontHeightGet() * 4);
-	sprintf_(buff, "%c", _last_key);
 	uiMenu(_softkey_menu_names, NULL, UI_MENU_ROUND_END, false);
 
 	return ret;
@@ -143,7 +147,7 @@ int main()
 #endif
 
 	// Controling code exited, so its time to power down or do some poweroff action, for now the crash screen has a power off option
-	debug_panic("Kernal messagepump ended", msg.event_id, true);
+	debug_panic("Kernal ended", msg.event_id, true);
 
 	return 0;
 }

@@ -9,6 +9,7 @@
 typedef struct
 {
     uint8_t error; // non zero if there was an error
+    const char *error_message;
 } KERNAL_EVENT_HANDLER_RETURN;
 
 typedef struct
@@ -122,6 +123,10 @@ int _handle_keypress_checks(void)
                 lcdContrastDecrease();
                 break;
 
+            case KEY_MENU10SY:
+                //This is gonna be the kernal debug key
+            break;
+
             default:
                 Enqueue_KMSG(_kernal_message_queue, (KMSG){.event_id = KERNAL_EVENT_KEYPRESS, .event_data = key});
                 break;
@@ -207,7 +212,7 @@ bool KernalGetMessage(KMSG *msg)
         debug_panic("Kernal message queue is empty but we have elements in it", 0, true);
     Dequeue_KMSG(_kernal_message_queue);
 
-    return true; // Keep pump runnint
+    return true;
 }
 
 void DispatchMessage(KMSG *msg)
