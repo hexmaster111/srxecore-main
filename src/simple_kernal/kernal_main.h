@@ -26,6 +26,7 @@ Queue_KMSG *_kernal_message_queue;
 
 #define INACTIVITY_TIMEOUT 600000
 #define KEYSCAN_INTERVAL 10
+#define KERNAL_MAX_EVENT_QUEUE_SIZE 10
 
 static unsigned long _keyscan_timer;
 static unsigned long _last_key_pressed_time;
@@ -62,7 +63,7 @@ bool KernalRegisterEventHandler(KERNAL_EVENT_HANDLER event_handler)
 
 void _kernal_init(void)
 {
-    _kernal_message_queue = createQueue_KMSG(10);
+    _kernal_message_queue = createQueue_KMSG(KERNAL_MAX_EVENT_QUEUE_SIZE);
 
     clockInit();
     powerInit();
@@ -77,7 +78,8 @@ void _do_appsafe_sleep()
 {
     Enqueue_KMSG(_kernal_message_queue, (KMSG){.event_id = KERNAL_EVENT_SLEEP});
 
-    // TODO: Wait for some sort of response from the app, or a timeout then sleep fornow crash with not implemented
+    // TODO: Wait for some sort of response from the app, 
+    // or a timeout then sleep fornow crash with not implemented
     kernal_panic("Sleep saving not implemented", 0, false);
 
     lcdSleep();
@@ -180,19 +182,19 @@ void _kernal_check_for_changes(void)
 
     status = _handle_keypress_checks();
     if (status != 0)
-        kernal_panic("Error in keypress checks", status, true);
+        kernal_panic("keypress checks", status, true);
 
     status = _handle_battery_checks();
     if (status != 0)
-        kernal_panic("Error in battery checks", status, true);
+        kernal_panic("battery checks", status, true);
 
     status = _handle_inactivity_timeout();
     if (status != 0)
-        kernal_panic("Error in inactivity timeout", status, true);
+        kernal_panic("inactivity timeout", status, true);
 
     status = _handle_timer_checks();
     if (status != 0)
-        kernal_panic("Error in timer checks", status, true);
+        kernal_panic("timer checks", status, true);
 }
 
 

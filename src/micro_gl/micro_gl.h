@@ -8,24 +8,15 @@
 #ifndef MICRO_GL_H
 #define MICRO_GL_H
 
-typedef enum {
-    MGL_White,
-    MGL_LightGray,
-    MGL_DarkGray,
-    MGL_Black,
-} MGL_COLOR;
-
-
-
 //----------------FUNCTIONS THE USER MUST IMPLEMENT----------------//
 
-        // -- USER INCLUDES -- //
-        #include "../lcdbase.h"
+// -- USER INCLUDES -- //
+#include "../lcdbase.h"
 
-void _MGL_draw_pixel(int x, int y, uint8_t fg, MGL_COLOR bg);
-
-void _MGL_fill_rect(int x, int y, int w, int h, MGL_COLOR color);
-void _MGL_put_string(int x, int y, char *str, MGL_COLOR color);
+void _MGL_draw_pixel(int x, int y, int fg, int bg);
+void _MGL_fill_rect(int x, int y, int w, int h, int color);
+void _MGL_put_string(int x, int y, char *str, int color);
+void _MGL_set_color(int fg, int bg);
 int _MGL_get_active_font_height();
 int _MGL_get_active_font_width();
 //-----------------------------------------------------------------//
